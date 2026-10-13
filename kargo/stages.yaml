@@ -16,12 +16,6 @@ spec:
       - task:
           name: demo-promo-process
         as: promo-process
-  verification:
-    analysisTemplates:
-    - name: http-health-check
-    args:
-    - name: stage
-      value: test
 ---
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
@@ -42,12 +36,6 @@ spec:
       - task:
           name: demo-promo-process
         as: promo-process
-  verification:
-    analysisTemplates:
-    - name: http-health-check
-    args:
-    - name: stage
-      value: uat
 ---
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
@@ -68,9 +56,3 @@ spec:
       - task:
           name: demo-promo-process
         as: promo-process
-  verification:
-    analysisTemplates:
-    - name: http-health-check
-    args:
-    - name: stage
-      value: prod

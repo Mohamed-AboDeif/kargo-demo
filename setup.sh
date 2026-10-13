@@ -79,13 +79,11 @@ mkdir -p "$RENDERED_DIR"
 ENVSUBST_VARS='$GITOPS_REPO_URL $GITHUB_USERNAME $GITHUB_PAT $DOCKERHUB_USERNAME $DOCKERHUB_PAT'
 
 envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/argocd/applicationset.yaml" > "$RENDERED_DIR/applicationset.yaml"
-envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/kargo/project.yaml" > "$RENDERED_DIR/project.yaml"
+envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/kargo/project-config.yaml" > "$RENDERED_DIR/project-config.yaml"
 envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/kargo/promotion-task.yaml" > "$RENDERED_DIR/promotion-task.yaml"
 
 cp "$SCRIPT_DIR/kargo/warehouse.yaml" "$RENDERED_DIR/warehouse.yaml"
 cp "$SCRIPT_DIR/kargo/stages.yaml" "$RENDERED_DIR/stages.yaml"
-cp "$SCRIPT_DIR/kargo/analysis-template.yaml" "$RENDERED_DIR/analysis-template.yaml"
-
 ok "Templates rendered"
 
 # Phase 4: Apply resources in dependency order
@@ -93,8 +91,9 @@ info "Creating Argo CD ApplicationSet..."
 kubectl apply -f "$RENDERED_DIR/applicationset.yaml"
 ok "ApplicationSet created"
 
-info "Creating Kargo Project and credentials..."
-kubectl apply -f "$RENDERED_DIR/project.yaml"
+info "Creating Kargo Project..."
+kubectl apply -f "$SCRIPT_DIR/kargo/project.yaml"
+ok "Project created"
 
 info "Waiting for kargo-demo namespace..."
 for i in $(seq 1 30); do
@@ -106,6 +105,10 @@ done
 kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/kargo-demo --timeout=60s
 ok "Namespace kargo-demo is active"
 
+info "Creating ProjectConfig and credentials..."
+kubectl apply -f "$RENDERED_DIR/project-config.yaml"
+ok "ProjectConfig and credentials created"
+
 info "Creating Warehouse..."
 kubectl apply -f "$RENDERED_DIR/warehouse.yaml"
 ok "Warehouse created"
@@ -113,10 +116,6 @@ ok "Warehouse created"
 info "Creating PromotionTask..."
 kubectl apply -f "$RENDERED_DIR/promotion-task.yaml"
 ok "PromotionTask created"
-
-info "Creating AnalysisTemplate for verification..."
-kubectl apply -f "$RENDERED_DIR/analysis-template.yaml"
-ok "AnalysisTemplate created"
 
 info "Creating Stages (test, uat, prod)..."
 kubectl apply -f "$RENDERED_DIR/stages.yaml"

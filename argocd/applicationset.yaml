@@ -21,9 +21,12 @@ spec:
         repoURL: ${GITOPS_REPO_URL}
         targetRevision: stage/{{stage}}
         path: .
+        directory:
+          recurse: true
       destination:
         server: https://kubernetes.default.svc
         namespace: kargo-demo-{{stage}}
       syncPolicy:
+        automated: {}
         syncOptions:
         - CreateNamespace=true

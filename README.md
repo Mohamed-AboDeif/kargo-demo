@@ -11,13 +11,18 @@ Push tag v0.2.0 → CI builds image → DockerHub → Kargo Warehouse discovers 
 
 ## Prerequisites
 
-- Kubernetes cluster with **Kargo**, **Argo CD**, and **Argo Rollouts** installed
+- Kubernetes cluster with **Kargo** and **Argo CD** installed
 - `kubectl` configured to access the cluster
 - `git` and `envsubst` available locally
 - A GitHub repository (this repo) for both source code and GitOps manifests
 - A DockerHub repository for container images
 - GitHub PAT with **Contents: Read and write** on this repo
 - DockerHub access token with **Read & Write** permission
+
+**Optional:** Install **Argo Rollouts** to enable post-promotion verification
+via the included AnalysisTemplate (`kargo/analysis-template.yaml`). Without
+Argo Rollouts, the pipeline works but skips the verification step — add the
+`verification` block to each Stage in `kargo/stages.yaml` once installed.
 
 ## Setup
 
@@ -62,12 +67,12 @@ export DOCKERHUB_PAT=<dockerhub-access-token>
 The setup script will:
 
 1. Push the Helm chart (`app/`) to the GitOps repository
-2. Create an Argo CD ApplicationSet (3 Applications: test, uat, prod)
-3. Create a Kargo Project with Git and DockerHub credentials
-4. Create a Warehouse watching `docker.io/abodeifregistfy/kargodemo`
-5. Create a PromotionTask with Helm-based rendering steps
-6. Create an AnalysisTemplate for post-promotion health checks
-7. Create 3 Stages with verification and auto-promotion (test, uat)
+2. Create an Argo CD ApplicationSet (3 Applications with auto-sync)
+3. Create a Kargo Project and ProjectConfig (auto-promotion for test, uat)
+4. Create credential Secrets for Git and DockerHub
+5. Create a Warehouse watching `docker.io/abodeifregistfy/kargodemo`
+6. Create a PromotionTask with Helm-based rendering steps
+7. Create 3 Stages (test, uat, prod)
 
 ## Promoting Freight
 
@@ -75,13 +80,13 @@ After setup, the Warehouse discovers image tags and produces Freight.
 
 **Auto-promotion (test and uat):**
 
-New Freight is automatically promoted to the **test** stage. Once test passes
-verification (HTTP health check), the same Freight auto-promotes to **uat**.
+New Freight is automatically promoted to the **test** stage. Once test is
+healthy, the same Freight auto-promotes to **uat**.
 
 **Manual promotion (prod):**
 
-After uat is healthy and verified, open the Kargo dashboard and manually
-promote the Freight to **prod**.
+After uat is healthy, open the Kargo dashboard and manually promote the
+Freight to **prod**.
 
 ## Per-Stage Differences
 
@@ -137,13 +142,14 @@ through test and uat. Manually approve for prod.
 │       ├── deployment.yaml        # Deployment with probes and env
 │       └── service.yaml           # ClusterIP Service
 ├── argocd/
-│   └── applicationset.yaml        # Argo CD ApplicationSet
+│   └── applicationset.yaml        # Argo CD ApplicationSet (auto-sync)
 ├── kargo/
-│   ├── project.yaml               # Project + credentials + auto-promotion
+│   ├── project.yaml               # Kargo Project (creates namespace)
+│   ├── project-config.yaml        # ProjectConfig + credentials + auto-promotion
 │   ├── warehouse.yaml             # Watches DockerHub for new tags
 │   ├── promotion-task.yaml        # 7-step Helm-based promotion process
-│   ├── analysis-template.yaml     # HTTP health check for verification
-│   └── stages.yaml                # test, uat, prod Stages with verification
+│   ├── analysis-template.yaml     # HTTP health check (requires Argo Rollouts)
+│   └── stages.yaml                # test, uat, prod Stages
 ├── setup.sh                       # One-command setup
 └── cleanup.sh                     # Teardown
 ```

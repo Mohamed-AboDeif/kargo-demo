@@ -22,27 +22,25 @@ spec:
   - uses: git-clear
     config:
       path: ./out
-  - uses: helm-update-image
+  - uses: yaml-update
     as: update
     config:
-      path: ./src/app
-      images:
-      - image: ${{ vars.imageRepo }}
-        key: image.tag
-        value: Tag
-        valuesFilePath: values-${{ ctx.stage }}.yaml
+      path: ./src/app/values-${{ ctx.stage }}.yaml
+      updates:
+      - key: image.tag
+        value: ${{ imageFrom(vars.imageRepo).Tag }}
   - uses: helm-template
     config:
       path: ./src/app
       outPath: ./out
       releaseName: kargo-demo
       valuesFiles:
-      - values-${{ ctx.stage }}.yaml
+      - ./src/app/values-${{ ctx.stage }}.yaml
   - uses: git-commit
     as: commit
     config:
       path: ./out
-      message: ${{ task.outputs.update.commitMessage }}
+      message: "Promote ${{ ctx.stage }} to image tag ${{ imageFrom(vars.imageRepo).Tag }}"
   - uses: git-push
     config:
       path: ./out
