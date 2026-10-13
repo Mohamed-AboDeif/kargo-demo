@@ -1,0 +1,30 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: kargo-demo
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: kargo-demo-repo
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/cred-type: git
+stringData:
+  repoURL: ${GITOPS_REPO_URL}
+  username: ${GITHUB_USERNAME}
+  password: ${GITHUB_PAT}
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: kargo-demo-image
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/cred-type: image
+stringData:
+  repoURL: docker.io/abodeifregistfy/kargodemo
+  username: ${DOCKERHUB_USERNAME}
+  password: ${DOCKERHUB_PAT}
