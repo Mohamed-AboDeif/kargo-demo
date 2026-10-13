@@ -1,0 +1,53 @@
+---
+# Source: kargo-demo/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kargo-demo
+  labels:
+    app.kubernetes.io/name: kargo-demo
+    app.kubernetes.io/instance: kargo-demo
+    app.kubernetes.io/version: "0.2.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kargo-demo
+      app.kubernetes.io/instance: kargo-demo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kargo-demo
+        app.kubernetes.io/instance: kargo-demo
+    spec:
+      containers:
+      - name: nginx
+        image: "abodeifregistfy/kargodemo:0.2.0"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: kargo-demo
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 200m
+            memory: 128Mi
