@@ -49,11 +49,11 @@ git push origin v0.1.0
 ### 3. Deploy to Kubernetes
 
 ```bash
-export GITOPS_REPO_URL=https://github.com/<username>/kargo-demo
-export GITHUB_USERNAME=<username>
-export GITHUB_PAT=<github-pat>
-export DOCKERHUB_USERNAME=<dockerhub-username>
-export DOCKERHUB_PAT=<dockerhub-pat>
+export GITOPS_REPO_URL=https://github.com/Mohamed-AboDeif/kargo-demo
+export GITHUB_USERNAME=Mohamed-AboDeif
+export GITHUB_PAT=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
+export DOCKERHUB_USERNAME=abodeifregistfy
+export DOCKERHUB_PAT=dckr_pat__oaLN1V9jyDSh6zKfspvi-zuLGA
 
 ./setup.sh
 ```
