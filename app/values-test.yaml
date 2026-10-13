@@ -1,0 +1,13 @@
+replicaCount: 1
+stage: "test"
+
+image:
+  tag: "0.1.0"
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 64Mi
+  requests:
+    cpu: 50m
+    memory: 32Mi

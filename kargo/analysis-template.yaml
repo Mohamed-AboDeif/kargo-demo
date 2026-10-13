@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: http-health-check
+  namespace: kargo-demo
+spec:
+  args:
+  - name: stage
+  metrics:
+  - name: http-check
+    provider:
+      job:
+        spec:
+          backoffLimit: 1
+          template:
+            spec:
+              containers:
+              - name: check
+                image: curlimages/curl:8.10.1
+                command:
+                - curl
+                - -sf
+                - --max-time
+                - "10"
+                - http://kargo-demo.kargo-demo-{{args.stage}}.svc.cluster.local
+              restartPolicy: Never
+    count: 1
+    failureLimit: 0

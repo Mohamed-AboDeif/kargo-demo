@@ -22,17 +22,22 @@ spec:
   - uses: git-clear
     config:
       path: ./out
-  - uses: kustomize-set-image
+  - uses: helm-update-image
     as: update
     config:
-      path: ./src/base
+      path: ./src/app
       images:
       - image: ${{ vars.imageRepo }}
-        tag: ${{ imageFrom(vars.imageRepo).Tag }}
-  - uses: kustomize-build
+        key: image.tag
+        value: Tag
+        valuesFilePath: values-${{ ctx.stage }}.yaml
+  - uses: helm-template
     config:
-      path: ./src/stages/${{ ctx.stage }}
+      path: ./src/app
       outPath: ./out
+      releaseName: kargo-demo
+      valuesFiles:
+      - values-${{ ctx.stage }}.yaml
   - uses: git-commit
     as: commit
     config:

@@ -56,17 +56,16 @@ else
   git remote add origin "$REPO_URL_WITH_CREDS"
 fi
 
-if [ -f "base/kustomization.yaml" ]; then
-  info "GitOps repo already contains app manifests, skipping push."
+if [ -f "app/Chart.yaml" ]; then
+  info "GitOps repo already contains Helm chart, skipping push."
 else
-  cp -r "$SCRIPT_DIR/app/base" .
-  cp -r "$SCRIPT_DIR/app/stages" .
+  cp -r "$SCRIPT_DIR/app" .
 
   git add .
   git -c user.name="kargo-demo" -c user.email="kargo-demo@example.com" \
-    commit -m "Initial app manifests for Kargo demo"
+    commit -m "Initial Helm chart for Kargo demo"
   git push -u origin main
-  ok "App manifests pushed to ${GITOPS_REPO_URL}"
+  ok "Helm chart pushed to ${GITOPS_REPO_URL}"
 fi
 
 cd "$SCRIPT_DIR"
@@ -85,6 +84,7 @@ envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/kargo/promotion-task.yaml" > "$RENDERED
 
 cp "$SCRIPT_DIR/kargo/warehouse.yaml" "$RENDERED_DIR/warehouse.yaml"
 cp "$SCRIPT_DIR/kargo/stages.yaml" "$RENDERED_DIR/stages.yaml"
+cp "$SCRIPT_DIR/kargo/analysis-template.yaml" "$RENDERED_DIR/analysis-template.yaml"
 
 ok "Templates rendered"
 
@@ -114,6 +114,10 @@ info "Creating PromotionTask..."
 kubectl apply -f "$RENDERED_DIR/promotion-task.yaml"
 ok "PromotionTask created"
 
+info "Creating AnalysisTemplate for verification..."
+kubectl apply -f "$RENDERED_DIR/analysis-template.yaml"
+ok "AnalysisTemplate created"
+
 info "Creating Stages (test, uat, prod)..."
 kubectl apply -f "$RENDERED_DIR/stages.yaml"
 ok "Stages created"
@@ -121,13 +125,13 @@ ok "Stages created"
 echo ""
 ok "Demo setup complete!"
 echo ""
-info "The Warehouse will discover image tags from docker.io/abodeifregistfy/kargodemo matching ^0.1.0."
+info "The Warehouse will discover image tags from docker.io/abodeifregistfy/kargodemo matching >=0.1.0."
 info "Freight should appear within a few seconds."
 echo ""
 info "Next steps:"
 info "  1. Open the Kargo dashboard and select the 'kargo-demo' project"
-info "  2. Drag a piece of Freight onto the 'test' Stage to promote it"
-info "  3. After 'test' is healthy, promote to 'uat', then 'prod'"
-info "  4. To trigger new Freight, push a new git tag (e.g. v0.2.0) to build a new image"
+info "  2. The 'test' and 'uat' stages will auto-promote new Freight"
+info "  3. After 'uat' is healthy and verified, manually promote Freight to 'prod'"
+info "  4. To trigger new Freight, push a new git tag (e.g. v0.3.0) to build a new image"
 echo ""
 info "To clean up: ./cleanup.sh"

@@ -7,5 +7,5 @@ spec:
   subscriptions:
   - image:
       repoURL: docker.io/abodeifregistfy/kargodemo
-      constraint: ^0.1.0
+      constraint: ">=0.1.0"
       discoveryLimit: 5

@@ -23,28 +23,28 @@ jobs:
             document-start: disable,
             comments-indentation: disable
           }
-        }' argocd/ kargo/ app/
+        }' argocd/ kargo/ app/Chart.yaml app/values.yaml app/values-test.yaml app/values-uat.yaml app/values-prod.yaml
 
   shellcheck:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Run ShellCheck
-      run: shellcheck setup.sh cleanup.sh
+      run: shellcheck setup.sh cleanup.sh start.sh
 
-  kustomize-validate:
+  helm-validate:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install kustomize
-      run: |
-        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-        sudo mv kustomize /usr/local/bin/
-    - name: Validate kustomize overlays
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+    - name: Lint chart
+      run: helm lint app/
+    - name: Validate template rendering per stage
       run: |
         for stage in test uat prod; do
           echo "Validating stage: ${stage}"
-          kustomize build "app/stages/${stage}"
+          helm template kargo-demo app/ -f "app/values-${stage}.yaml"
         done
 
   docker-build:

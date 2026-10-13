@@ -1,16 +1,17 @@
 # Kargo Demo
 
 A 3-stage promotion pipeline powered by Kargo, demonstrating continuous
-promotion of a custom Docker image through test, uat, and prod environments.
+promotion of a custom Docker image through test, uat, and prod environments
+using Helm charts.
 
 ```
 Push tag v0.2.0 → CI builds image → DockerHub → Kargo Warehouse discovers tag
-→ Freight created → promote: test → uat → prod
+→ Freight created → auto-promote: test → uat → manual approve: prod
 ```
 
 ## Prerequisites
 
-- Kubernetes cluster with **Kargo** and **Argo CD** installed
+- Kubernetes cluster with **Kargo**, **Argo CD**, and **Argo Rollouts** installed
 - `kubectl` configured to access the cluster
 - `git` and `envsubst` available locally
 - A GitHub repository (this repo) for both source code and GitOps manifests
@@ -49,33 +50,50 @@ git push origin v0.1.0
 ### 3. Deploy to Kubernetes
 
 ```bash
-export GITOPS_REPO_URL=https://github.com/Mohamed-AboDeif/kargo-demo
-export GITHUB_USERNAME=Mohamed-AboDeif
-export GITHUB_PAT=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
-export DOCKERHUB_USERNAME=abodeifregistfy
-export DOCKERHUB_PAT=dckr_pat__oaLN1V9jyDSh6zKfspvi-zuLGA
+export GITOPS_REPO_URL=https://github.com/<username>/<repo>
+export GITHUB_USERNAME=<username>
+export GITHUB_PAT=<personal-access-token>
+export DOCKERHUB_USERNAME=<dockerhub-username>
+export DOCKERHUB_PAT=<dockerhub-access-token>
 
 ./setup.sh
 ```
 
 The setup script will:
 
-1. Push the Kustomize app manifests (`app/`) to the GitOps repository
+1. Push the Helm chart (`app/`) to the GitOps repository
 2. Create an Argo CD ApplicationSet (3 Applications: test, uat, prod)
 3. Create a Kargo Project with Git and DockerHub credentials
 4. Create a Warehouse watching `docker.io/abodeifregistfy/kargodemo`
-5. Create a PromotionTask and 3 Stages
+5. Create a PromotionTask with Helm-based rendering steps
+6. Create an AnalysisTemplate for post-promotion health checks
+7. Create 3 Stages with verification and auto-promotion (test, uat)
 
 ## Promoting Freight
 
 After setup, the Warehouse discovers image tags and produces Freight.
 
-**Using the Kargo Dashboard:**
+**Auto-promotion (test and uat):**
 
-1. Open the dashboard and select the `kargo-demo` project
-2. Drag a piece of Freight onto the **test** Stage
-3. Wait for **test** to become healthy
-4. Promote the same Freight to **uat**, then **prod**
+New Freight is automatically promoted to the **test** stage. Once test passes
+verification (HTTP health check), the same Freight auto-promotes to **uat**.
+
+**Manual promotion (prod):**
+
+After uat is healthy and verified, open the Kargo dashboard and manually
+promote the Freight to **prod**.
+
+## Per-Stage Differences
+
+Each stage renders the Helm chart with its own values file:
+
+| Stage | Replicas | CPU Limit | Memory Limit |
+|-------|----------|-----------|-------------|
+| test  | 1        | 100m      | 64Mi        |
+| uat   | 2        | 200m      | 128Mi       |
+| prod  | 3        | 500m      | 256Mi       |
+
+The app page shows the stage name, version, and pod hostname dynamically.
 
 ## Releasing a New Version
 
@@ -84,12 +102,13 @@ To trigger a new promotion cycle:
 ```bash
 # Make changes to index.html or Dockerfile
 git add . && git commit -m "update app"
-git tag v0.2.0
-git push origin main v0.2.0
+git tag v0.3.0
+git push origin main v0.3.0
 ```
 
-The CI workflow builds and pushes `abodeifregistfy/kargodemo:0.2.0`.
-Kargo discovers the new tag and creates new Freight.
+The CI workflow builds and pushes `abodeifregistfy/kargodemo:0.3.0`.
+Kargo discovers the new tag, creates new Freight, and auto-promotes
+through test and uat. Manually approve for prod.
 
 ## Cleanup
 
@@ -100,24 +119,31 @@ Kargo discovers the new tag and creates new Freight.
 ## File Structure
 
 ```
-├── Dockerfile                 # App image (nginx + custom index.html)
-├── index.html                 # App content
+├── Dockerfile                     # App image (nginx + dynamic index.html)
+├── index.html                     # App template (envsubst at startup)
+├── start.sh                       # Nginx startup with envsubst
 ├── .github/workflows/
-│   ├── ci.yaml                # Lint, validate, test build
-│   └── build-and-push.yaml    # Build & push on tag (v*)
-├── app/                       # Kustomize manifests (pushed to GitOps branches)
-│   ├── base/
-│   │   ├── kustomization.yaml
-│   │   └── deployment.yaml
-│   └── stages/{test,uat,prod}/
-│       └── kustomization.yaml
+│   ├── ci.yaml                    # Lint, Helm validate, test build
+│   └── build-and-push.yaml        # Build & push on tag (v*)
+├── app/                           # Helm chart (pushed to GitOps repo)
+│   ├── Chart.yaml
+│   ├── values.yaml                # Base defaults
+│   ├── values-test.yaml           # Test: 1 replica, small resources
+│   ├── values-uat.yaml            # UAT: 2 replicas, medium resources
+│   ├── values-prod.yaml           # Prod: 3 replicas, larger resources
+│   └── templates/
+│       ├── _helpers.tpl           # Name, labels, selector helpers
+│       ├── configmap.yaml         # Stage metadata (STAGE_NAME, APP_VERSION)
+│       ├── deployment.yaml        # Deployment with probes and env
+│       └── service.yaml           # ClusterIP Service
 ├── argocd/
-│   └── applicationset.yaml    # Argo CD ApplicationSet
+│   └── applicationset.yaml        # Argo CD ApplicationSet
 ├── kargo/
-│   ├── project.yaml           # Project + Git/DockerHub credentials
-│   ├── warehouse.yaml         # Watches DockerHub for new tags
-│   ├── promotion-task.yaml    # 7-step promotion process
-│   └── stages.yaml            # test, uat, prod Stages
-├── setup.sh                   # One-command setup
-└── cleanup.sh                 # Teardown
+│   ├── project.yaml               # Project + credentials + auto-promotion
+│   ├── warehouse.yaml             # Watches DockerHub for new tags
+│   ├── promotion-task.yaml        # 7-step Helm-based promotion process
+│   ├── analysis-template.yaml     # HTTP health check for verification
+│   └── stages.yaml                # test, uat, prod Stages with verification
+├── setup.sh                       # One-command setup
+└── cleanup.sh                     # Teardown
 ```
