@@ -21,7 +21,8 @@ jobs:
             line-length: {max: 150},
             truthy: disable,
             document-start: disable,
-            comments-indentation: disable
+            comments-indentation: disable,
+            indentation: {indent-sequences: false}
           }
         }' argocd/ kargo/ app/Chart.yaml app/values.yaml app/values-test.yaml app/values-uat.yaml app/values-prod.yaml
 
