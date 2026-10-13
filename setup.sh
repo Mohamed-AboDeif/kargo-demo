@@ -76,6 +76,7 @@ info "Rendering templates..."
 RENDERED_DIR="$WORK_DIR/rendered"
 mkdir -p "$RENDERED_DIR"
 
+# shellcheck disable=SC2016
 ENVSUBST_VARS='$GITOPS_REPO_URL $GITHUB_USERNAME $GITHUB_PAT $DOCKERHUB_USERNAME $DOCKERHUB_PAT'
 
 envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/argocd/applicationset.yaml" > "$RENDERED_DIR/applicationset.yaml"
@@ -96,7 +97,7 @@ kubectl apply -f "$SCRIPT_DIR/kargo/project.yaml"
 ok "Project created"
 
 info "Waiting for kargo-demo namespace..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if kubectl get namespace kargo-demo &>/dev/null; then
     break
   fi
