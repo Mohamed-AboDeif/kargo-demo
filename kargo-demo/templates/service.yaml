@@ -7,7 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: kargo-demo
     app.kubernetes.io/instance: kargo-demo
-    app.kubernetes.io/version: "0.2.0"
+    app.kubernetes.io/version: "0.4.0"
     app.kubernetes.io/managed-by: Helm
 spec:
   type: ClusterIP
