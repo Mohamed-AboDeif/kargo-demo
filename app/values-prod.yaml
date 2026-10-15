@@ -14,14 +14,14 @@ rollout:
   enabled: true
   canary:
     steps:
-      - setWeight: 10
-      - pause: {}          # indefinite pause — manual promote via Argo Rollouts dashboard / kubectl
-      - setWeight: 50
-      - analysis:
-          templates:
-            - templateName: http-health-check
-          args:
-            - name: stage
-              value: "prod"
-      - setWeight: 100
+    - setWeight: 10
+    - pause: {}
+    - setWeight: 50
+    - analysis:
+        templates:
+        - templateName: http-health-check
+        args:
+        - name: stage
+          value: "prod"
+    - setWeight: 100
     analysis: {}
