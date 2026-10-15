@@ -31,8 +31,10 @@ jobs:
         tags: ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}
 
     # Gate the release: a CRITICAL/HIGH vulnerability fails the job and blocks the push.
+    # Pinned to a commit SHA (v0.36.0) following the 2026 trivy-action tag
+    # compromise; prefer SHA pinning over mutable version tags.
     - name: Trivy image scan
-      uses: aquasecurity/trivy-action@0.28.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
       with:
         scan-type: image
         image-ref: ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}

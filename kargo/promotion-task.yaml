@@ -5,63 +5,63 @@ metadata:
   namespace: kargo-demo
 spec:
   vars:
-    - name: gitopsRepo
-      value: ${GITOPS_REPO_URL}
+  - name: gitopsRepo
+    value: ${GITOPS_REPO_URL}
 
-    - name: imageRepo
-      value: docker.io/abodeifregistfy/kargodemo
+  - name: imageRepo
+    value: docker.io/abodeifregistfy/kargodemo
 
   steps:
-    # 1. Clone the source of truth (main, with the Helm chart) into ./src
-    #    and the stage-specific branch into ./out.
-    - uses: git-clone
-      config:
-        repoURL: ${{ vars.gitopsRepo }}
-        checkout:
-          - branch: main
-            path: ./src
-          - branch: stage/${{ ctx.stage }}
-            create: true
-            path: ./out
-
-    # 2. Wipe the stage branch so it is rebuilt from a clean slate.
-    - uses: git-clear
-      config:
+  # 1. Clone the source of truth (main, with the Helm chart) into ./src
+  #    and the stage-specific branch into ./out.
+  - uses: git-clone
+    config:
+      repoURL: ${{ vars.gitopsRepo }}
+      checkout:
+      - branch: main
+        path: ./src
+      - branch: stage/${{ ctx.stage }}
+        create: true
         path: ./out
 
-    # 3. Copy the Helm chart from the source branch onto the stage branch.
-    #    Argo CD renders this chart (path: app) using values-<stage>.yaml.
-    - uses: copy
-      config:
-        inPath: ./src/app
-        outPath: ./out/app
+  # 2. Wipe the stage branch so it is rebuilt from a clean slate.
+  - uses: git-clear
+    config:
+      path: ./out
 
-    # 4. Patch image.tag in the stage values file with the Freight image tag.
-    - uses: yaml-update
-      as: update
-      config:
-        path: ./out/app/values-${{ ctx.stage }}.yaml
-        updates:
-          - key: image.tag
-            value: ${{ imageFrom(vars.imageRepo).Tag }}
+  # 3. Copy the Helm chart from the source branch onto the stage branch.
+  #    Argo CD renders this chart (path: app) using values-<stage>.yaml.
+  - uses: copy
+    config:
+      inPath: ./src/app
+      outPath: ./out/app
 
-    # 5. Commit the updated chart on the stage branch.
-    - uses: git-commit
-      as: commit
-      config:
-        path: ./out
-        message: "Promote ${{ ctx.stage }} to image tag ${{ imageFrom(vars.imageRepo).Tag }}"
+  # 4. Patch image.tag in the stage values file with the Freight image tag.
+  - uses: yaml-update
+    as: update
+    config:
+      path: ./out/app/values-${{ ctx.stage }}.yaml
+      updates:
+      - key: image.tag
+        value: ${{ imageFrom(vars.imageRepo).Tag }}
 
-    # 6. Push the stage branch to the remote GitOps repo.
-    - uses: git-push
-      config:
-        path: ./out
+  # 5. Commit the updated chart on the stage branch.
+  - uses: git-commit
+    as: commit
+    config:
+      path: ./out
+      message: "Promote ${{ ctx.stage }} to image tag ${{ imageFrom(vars.imageRepo).Tag }}"
 
-    # 7. Tell Argo CD to sync the stage Application to the exact commit.
-    - uses: argocd-update
-      config:
-        apps:
-          - name: kargo-demo-${{ ctx.stage }}
-            sources:
-              - repoURL: ${{ vars.gitopsRepo }}
-                desiredRevision: ${{ task.outputs.commit.commit }}
+  # 6. Push the stage branch to the remote GitOps repo.
+  - uses: git-push
+    config:
+      path: ./out
+
+  # 7. Tell Argo CD to sync the stage Application to the exact commit.
+  - uses: argocd-update
+    config:
+      apps:
+      - name: kargo-demo-${{ ctx.stage }}
+        sources:
+        - repoURL: ${{ vars.gitopsRepo }}
+          desiredRevision: ${{ task.outputs.commit.commit }}
