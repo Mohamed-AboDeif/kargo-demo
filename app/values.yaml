@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: abodeifregistfy/kargodemo
-  tag: "0.1.0"
+  tag: "" # default to the chart appVersion if not set
   pullPolicy: IfNotPresent
 stage: "default"
 service:
