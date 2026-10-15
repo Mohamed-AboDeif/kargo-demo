@@ -54,3 +54,36 @@ jobs:
     - uses: actions/checkout@v4
     - name: Test Docker build
       run: docker build -t kargodemo:test .
+
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@v4
+
+    # Scan repo for IaC misconfigurations, Dockerfile issues, and secrets.
+    - name: Trivy config/filesystem scan
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: fs
+        scan-ref: .
+        scanners: misconfig,secret,vuln
+        severity: CRITICAL,HIGH
+        exit-code: "1"
+        ignore-unfixed: true
+
+    - name: Build image for scanning
+      run: docker build -t kargodemo:scan .
+
+    # Scan the built container image for OS/library vulnerabilities.
+    - name: Trivy image scan
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: image
+        image-ref: kargodemo:scan
+        scanners: vuln
+        severity: CRITICAL,HIGH
+        exit-code: "1"
+        ignore-unfixed: true

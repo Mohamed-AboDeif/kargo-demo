@@ -22,7 +22,27 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    # Build and load locally so the image can be scanned before it is pushed.
     - uses: docker/build-push-action@v6
+      with:
+        context: .
+        load: true
+        push: false
+        tags: ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}
+
+    # Gate the release: a CRITICAL/HIGH vulnerability fails the job and blocks the push.
+    - name: Trivy image scan
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: image
+        image-ref: ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}
+        scanners: vuln
+        severity: CRITICAL,HIGH
+        exit-code: "1"
+        ignore-unfixed: true
+
+    - name: Push image
+      uses: docker/build-push-action@v6
       with:
         context: .
         push: true
