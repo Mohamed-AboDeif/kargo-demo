@@ -61,9 +61,6 @@ spec:
             duration: 60s
         - setWeight: 50
         - analysis:
-            args:
-            - name: stage
-              value: uat
             templates:
             - templateName: http-health-check
         - setWeight: 100
