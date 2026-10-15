@@ -20,8 +20,5 @@ rollout:
     - analysis:
         templates:
         - templateName: http-health-check
-        args:
-        - name: stage
-          value: "prod"
     - setWeight: 100
     analysis: {}

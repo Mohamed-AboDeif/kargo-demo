@@ -21,8 +21,5 @@ rollout:
     - analysis:
         templates:
         - templateName: http-health-check
-        args:
-        - name: stage
-          value: "uat"
     - setWeight: 100
     analysis: {}
