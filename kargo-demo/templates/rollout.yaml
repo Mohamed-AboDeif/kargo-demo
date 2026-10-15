@@ -1,13 +1,13 @@
 ---
-# Source: kargo-demo/templates/deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
+# Source: kargo-demo/templates/rollout.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: kargo-demo
   labels:
     app.kubernetes.io/name: kargo-demo
     app.kubernetes.io/instance: kargo-demo
-    app.kubernetes.io/version: "0.4.0"
+    app.kubernetes.io/version: "0.5.0"
     app.kubernetes.io/managed-by: Helm
 spec:
   replicas: 2
@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: "abodeifregistfy/kargodemo:0.4.0"
+        image: "abodeifregistfy/kargodemo:0.5.0"
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -51,3 +51,19 @@ spec:
           requests:
             cpu: 100m
             memory: 64Mi
+  strategy:
+    canary:
+      canaryService: kargo-demo-canary
+      stableService: kargo-demo
+      steps:
+        - setWeight: 25
+        - pause:
+            duration: 60s
+        - setWeight: 50
+        - analysis:
+            args:
+            - name: stage
+              value: uat
+            templates:
+            - templateName: http-health-check
+        - setWeight: 100
