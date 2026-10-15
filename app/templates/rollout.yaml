@@ -1,0 +1,51 @@
+{{- if .Values.rollout.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "kargo-demo.fullname" . }}
+  labels:
+    {{- include "kargo-demo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kargo-demo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kargo-demo.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: nginx
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag  | default .Chart.AppVersion  }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "kargo-demo.fullname" . }}
+        {{- with .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+  strategy:
+    canary:
+      canaryService: {{ include "kargo-demo.fullname" . }}-canary
+      stableService: {{ include "kargo-demo.fullname" . }}
+      steps:
+        {{- toYaml .Values.rollout.canary.steps | nindent 8 }}
+      {{- if .Values.rollout.canary.analysis }}
+      analysis:
+        {{- toYaml .Values.rollout.canary.analysis | nindent 8 }}
+      {{- end }}
+{{- end }}
