@@ -1,0 +1,25 @@
+replicaCount: 2
+stage: "uat"
+image:
+  tag: "0.1.0"
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+rollout:
+  enabled: true
+  canary:
+    steps:
+    - setWeight: 25
+    - pause:
+        duration: 60s
+    - setWeight: 50
+    - analysis:
+        templates:
+        - templateName: http-health-check
+    - setWeight: 100
+    analysis: {}

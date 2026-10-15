@@ -1,0 +1,24 @@
+replicaCount: 3
+stage: "prod"
+image:
+  tag: 10.0.1
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+rollout:
+  enabled: true
+  canary:
+    steps:
+    - setWeight: 10
+    - pause: {}
+    - setWeight: 50
+    - analysis:
+        templates:
+        - templateName: http-health-check
+    - setWeight: 100
+    analysis: {}
