@@ -1,9 +1,7 @@
 replicaCount: 1
 stage: "test"
-
 image:
   tag: "0.1.0"
-
 resources:
   limits:
     cpu: 100m
@@ -11,3 +9,13 @@ resources:
   requests:
     cpu: 50m
     memory: 32Mi
+
+rollout:
+  enabled: true
+  canary:
+    steps:
+      - setWeight: 20
+      - pause:
+          duration: 30s
+      - setWeight: 100
+    analysis: {}

@@ -1,9 +1,7 @@
 replicaCount: 3
 stage: "prod"
-
 image:
   tag: "0.1.0"
-
 resources:
   limits:
     cpu: 500m
@@ -11,3 +9,19 @@ resources:
   requests:
     cpu: 200m
     memory: 128Mi
+
+rollout:
+  enabled: true
+  canary:
+    steps:
+      - setWeight: 10
+      - pause: {}          # indefinite pause — manual promote via Argo Rollouts dashboard / kubectl
+      - setWeight: 50
+      - analysis:
+          templates:
+            - templateName: http-health-check
+          args:
+            - name: stage
+              value: "prod"
+      - setWeight: 100
+    analysis: {}
