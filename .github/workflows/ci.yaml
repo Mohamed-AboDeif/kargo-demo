@@ -75,6 +75,9 @@ jobs:
         severity: CRITICAL,HIGH
         exit-code: "1"
         ignore-unfixed: true
+        # .env is gitignored (never committed); skip it so a developer's
+        # local credentials file does not break the scan.
+        skip-files: .env
 
     - name: Build image for scanning
       run: docker build -t kargodemo:scan .
