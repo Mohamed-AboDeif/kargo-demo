@@ -5,7 +5,17 @@ metadata:
   namespace: kargo-demo
 spec:
   subscriptions:
-  - image:
+  # New image tags create Freight (app code changes).
+  - name: image
+    image:
       repoURL: docker.io/abodeifregistfy/kargodemo
       constraint: ">=0.1.0"
       discoveryLimit: 5
+  # New commits to main under app/ create Freight (Helm chart changes),
+  # so chart updates flow through the same test -> uat -> prod pipeline.
+  - name: chart
+    git:
+      repoURL: https://github.com/Mohamed-AboDeif/kargo-demo
+      branch: main
+      includePaths:
+      - app

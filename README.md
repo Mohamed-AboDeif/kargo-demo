@@ -54,7 +54,7 @@ environments with auto-promotion and per-stage configuration.
 |----------|------|---------|
 | **Project** | `kargo/project.yaml` | Creates the `kargo-demo` namespace and establishes the Kargo project scope |
 | **ProjectConfig** | `kargo/project-config.yaml` | Configures auto-promotion policies for test and uat stages, and stores Git/DockerHub credentials as Secrets |
-| **Warehouse** | `kargo/warehouse.yaml` | Watches `docker.io/abodeifregistfy/kargodemo` for image tags matching `>=0.1.0` (up to 5 most recent). When a new tag appears, it creates a Freight artifact |
+| **Warehouse** | `kargo/warehouse.yaml` | Subscribes to two artifact sources: (1) image tags on `docker.io/abodeifregistfy/kargodemo` matching `>=0.1.0`, and (2) commits to `main` that touch `app/` (the Helm chart). A new image tag **or** a chart change creates Freight, so both flow through the test → uat → prod pipeline |
 | **PromotionTask** | `kargo/promotion-task.yaml` | Defines the 7-step process that runs each time Freight is promoted to a Stage (see [Promotion Steps](#promotion-steps) below) |
 | **Stages** | `kargo/stages.yaml` | Three Stages forming the pipeline: **test** receives Freight directly from the Warehouse, **uat** receives from test, **prod** receives from uat |
 | **AnalysisTemplate** | `kargo/analysis-template.yaml` | *(Optional, requires Argo Rollouts)* HTTP health check that verifies the app is responding after promotion |

@@ -12,13 +12,15 @@ spec:
     value: docker.io/abodeifregistfy/kargodemo
 
   steps:
-  # 1. Clone the source of truth (main, with the Helm chart) into ./src
-  #    and the stage-specific branch into ./out.
+  # 1. Clone the source of truth into ./src and the stage branch into ./out.
+  #    Check out the exact main commit carried by the Freight (not the
+  #    branch HEAD) so the chart promoted to each stage is the one that was
+  #    validated upstream, keeping test -> uat -> prod deterministic.
   - uses: git-clone
     config:
       repoURL: ${{ vars.gitopsRepo }}
       checkout:
-      - branch: main
+      - commit: ${{ commitFrom(vars.gitopsRepo).ID }}
         path: ./src
       - branch: stage/${{ ctx.stage }}
         create: true
