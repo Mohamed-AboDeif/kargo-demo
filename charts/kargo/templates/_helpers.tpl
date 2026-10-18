@@ -1,0 +1,680 @@
+{{/* vim: set filetype=mustache: */}}
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "kargo.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+kargo.validateNoLegacySecretNamespaces fails the render if either
+global.clusterSecretsNamespace or controller.globalCredentials.namespaces
+remains set. Both were replaced by global.systemResources.namespace and
+global.sharedResources.namespace, respectively, as of v1.9.0. The automatic
+Secret migration that bridged the old and new settings was removed in
+v1.12.0, so upgrading with either legacy setting still defined is no longer
+safe.
+
+Call this from the top-level conditional of any template belonging to a
+component that consumes global.systemResources.namespace or
+global.sharedResources.namespace. NOTES.txt is not a reliable place for this
+check: it is never rendered by `helm template`, which is how most GitOps
+tooling (e.g. Argo CD) applies this chart.
+*/}}
+{{- define "kargo.validateNoLegacySecretNamespaces" -}}
+{{- if dig "clusterSecretsNamespace" "" .Values.global }}
+{{- fail "global.clusterSecretsNamespace is no longer supported as of v1.12.0 and the automatic Secret migration that used to bridge it to global.systemResources.namespace has been removed. Remove this setting from your values. If you GitOps your Secrets, Kargo will no longer read from, or sync to, the old namespace -- make sure the Secrets it referenced already exist in the namespace specified by global.systemResources.namespace before upgrading." }}
+{{- end }}
+{{- if dig "globalCredentials" "namespaces" list .Values.controller }}
+{{- fail "controller.globalCredentials.namespaces is no longer supported as of v1.12.0 and the automatic Secret migration that used to bridge it to global.sharedResources.namespace has been removed. Remove this setting from your values. If you GitOps your Secrets, Kargo will no longer read from, or sync to, the old namespace(s) -- make sure the Secrets they referenced already exist in the namespace specified by global.sharedResources.namespace before upgrading." }}
+{{- end }}
+{{- end -}}
+
+{{/*
+kargo.controller.suffix returns `-<controller.id>` when controller.id is set,
+empty otherwise.
+*/}}
+{{- define "kargo.controller.suffix" -}}
+{{- if .Values.controller.id -}}-{{ .Values.controller.id }}{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.controller.fullname returns the controller's base name, suffixed, if
+applicable with `-<controller.id>`. Setting `controller.id` therefore allows for
+installing multiple controllers into a single cluster or even a single namespace
+(each as its own, separate Helm release) without name collisions.
+*/}}
+{{- define "kargo.controller.fullname" -}}
+kargo-controller{{ include "kargo.controller.suffix" . }}
+{{- end -}}
+
+{{/*
+kargo.controller.idLabel emits the `akuity.io/kargo-controller-id` label line
+when controller.id is set, empty otherwise. Used inside `labels:` /
+`matchLabels:` blocks across templates in the controller's install set.
+Callers handle indentation via `| nindent N`.
+*/}}
+{{- define "kargo.controller.idLabel" -}}
+{{- with .Values.controller.id -}}
+akuity.io/kargo-controller-id: {{ . | quote }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create image reference as used by resources.
+*/}}
+{{- define "kargo.image" -}}
+{{- $tag := default .Chart.AppVersion .Values.image.tag -}}
+{{- printf "%s:%s" .Values.image.repository $tag -}}
+{{- end -}}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "kargo.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Resolve the namespace where many of Kargo's own resources (accessed at runtime)
+reside. By default this is the chart's release namespace. In rare situations,
+Kargo workloads may run in one namespace (the chart's release namespace) while
+some resources accessed at runtime reside in another.
+*/}}
+{{- define "kargo.dataNamespace" -}}
+{{- .Values.global.kargoNamespace | default .Release.Namespace -}}
+{{- end -}}
+
+{{/*
+Check if TLS should be used for a service.
+*/}}
+{{- define "kargo.useTLS" -}}
+{{- $service := . -}}
+{{- or (and $service.ingress.enabled $service.ingress.tls.enabled)
+       (and (not $service.ingress.enabled) $service.tls.enabled)
+       $service.tls.terminatedUpstream -}}
+{{- end -}}
+
+{{/*
+Generate base URL for a service.
+*/}}
+{{- define "kargo.baseURL" -}}
+{{- $service := .service -}}
+{{- $host := .host -}}
+{{- $basePath := .basePath | default "" -}}
+{{- if eq (include "kargo.useTLS" $service) "true" -}}
+{{- printf "https://%s%s" $host $basePath -}}
+{{- else -}}
+{{- printf "http://%s%s" $host $basePath -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Generate the base URL for the API service.
+*/}}
+{{- define "kargo.api.baseURL" -}}
+{{- include "kargo.baseURL" (dict "service" .Values.api "host" .Values.api.host "basePath" .Values.api.basePath) -}}
+{{- end -}}
+
+{{/*
+Generate the base URL for the external webhook server. When the external
+webhooks server has its own Ingress, the URL is composed from its own host,
+TLS configuration, and basePath. When it instead piggybacks on the API
+server's Ingress, the URL is composed from the API server's host and TLS
+configuration, plus either an explicitly-set externalWebhooksServer.basePath
+or, by default, <api.basePath>/webhooks.
+*/}}
+{{- define "kargo.externalWebhooksServer.baseURL" -}}
+{{- $apiService := .Values.api -}}
+{{- $webhookService := .Values.externalWebhooksServer -}}
+{{- if and (not $webhookService.ingress.enabled) $apiService.enabled $apiService.ingress.enabled -}}
+{{- $basePath := $webhookService.basePath | default (printf "%s/webhooks" ($apiService.basePath | default "")) -}}
+{{- include "kargo.baseURL" (dict "service" $apiService "host" $apiService.host "basePath" $basePath) -}}
+{{- else -}}
+{{- include "kargo.baseURL" (dict "service" $webhookService "host" $webhookService.host "basePath" $webhookService.basePath) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create default controlplane user regular expression with well-known service accounts.
+*/}}
+{{- define "kargo.controlplane.defaultUserRegex" -}}
+{{- $components := dict
+    "api" .Values.api.enabled
+    "controller" .Values.controller.enabled
+    "garbage-collector" .Values.garbageCollector.enabled
+    "management-controller" .Values.managementController.enabled -}}
+{{- $serviceAccounts := list -}}
+{{- range $name, $enabled := $components -}}
+{{- if $enabled -}}
+{{- if eq $name "controller" -}}
+{{- $serviceAccounts = append $serviceAccounts (include "kargo.controller.fullname" $) -}}
+{{- else -}}
+{{- $serviceAccounts = append $serviceAccounts (printf "kargo-%s" $name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $serviceAccounts -}}
+{{- printf "^system:serviceaccount:%s:(%s)$" (include "kargo.dataNamespace" .) (join "|" $serviceAccounts) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Determine the most appropriate CPU resource field for GOMAXPROCS.
+*/}}
+{{- define "kargo.selectCpuResourceField" -}}
+{{- $resources := .resources -}}
+{{- $cpu := dict -}}
+{{- if $resources -}}
+{{- if and $resources.limits $resources.limits.cpu -}}
+{{- $cpu = set $cpu "field" "limits.cpu" -}}
+{{- else if and $resources.requests $resources.requests.cpu -}}
+{{- $cpu = set $cpu "field" "requests.cpu" -}}
+{{- else -}}
+{{- $cpu = set $cpu "field" "limits.cpu" -}}
+{{- end -}}
+{{- else -}}
+{{- $cpu = set $cpu "field" "limits.cpu" -}}
+{{- end -}}
+{{- $cpu.field -}}
+{{- end -}}
+
+{{/*
+kargo.annotations renders a complete metadata annotations block by merging
+.Values.global.annotations with a per-component annotations map.
+
+Call it by passing a dict with two keys:
+  - "root": the top-level chart context (.)
+  - "annotations": the component-specific annotations map (e.g. .Values.controller.annotations)
+
+Example:
+  {{- include "kargo.annotations" (dict "root" . "annotations" .Values.controller.annotations) | nindent 2 }}
+
+When the merged result is empty the helper emits nothing, so it is always safe to
+include unconditionally — no surrounding `with` is required.
+
+Use this helper only when the annotations block consists solely of the merged
+global + component values. When additional static annotations are required (e.g.
+cert-manager CA injection, configmap checksums), write the annotations block
+inline and call mergeOverwrite directly.
+
+For resources that have no component-specific annotations, omit the "annotations"
+key or pass an empty dict:
+  {{- include "kargo.annotations" (dict "root" .) | nindent 2 }}
+*/}}
+{{- define "kargo.annotations" -}}
+{{- with (mergeOverwrite (deepCopy .root.Values.global.annotations) (.annotations | default dict)) -}}
+annotations:
+  {{- range $key, $value := . }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Environment variables that configure distributed tracing, for inclusion in
+the ConfigMap of every Kargo component. Emits nothing when tracing is disabled.
+Beyond the Kargo-specific on/off switch, these are the standard OTEL_*
+variables that the OpenTelemetry SDK reads on its own.
+*/}}
+{{- define "kargo.tracing.configMapData" -}}
+{{- with .Values.global.tracing }}
+{{- if .enabled -}}
+TRACING_ENABLED: "true"
+OTEL_EXPORTER_OTLP_PROTOCOL: {{ quote .otlp.protocol }}
+{{- if .otlp.endpoint }}
+OTEL_EXPORTER_OTLP_ENDPOINT: {{ quote .otlp.endpoint }}
+{{- end }}
+OTEL_TRACES_SAMPLER: {{ quote .sampler }}
+{{- if .samplerArg }}
+OTEL_TRACES_SAMPLER_ARG: {{ quote .samplerArg }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Common labels
+*/}}
+{{- define "kargo.labels" -}}
+{{ include "kargo.standardLabels" . }}
+{{- with .Values.global.labels }}
+{{ toYaml . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Standard labels, without global.labels.
+*/}}
+{{- define "kargo.standardLabels" -}}
+helm.sh/chart: {{ include "kargo.chart" . }}
+{{ include "kargo.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{/*
+Standard labels plus global.labels merged with a component's own labels, the
+component's winning. Use this in place of kargo.labels wherever a component
+has a labels value: emitting global.labels through kargo.labels and again
+through the merge would repeat any key set in both, which YAML forbids.
+Takes a dict with "root" (the root context) and "labels" (the component's).
+*/}}
+{{- define "kargo.componentLabels" -}}
+{{ include "kargo.standardLabels" .root }}
+{{- with (mergeOverwrite (deepCopy .root.Values.global.labels) (.labels | default dict)) }}
+{{- range $key, $value := . }}
+{{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Selector labels
+*/}}
+{{- define "kargo.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "kargo.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
+{{- define "kargo.api.labels" -}}
+app.kubernetes.io/component: api
+{{- end -}}
+
+{{- define "kargo.controller.labels" -}}
+app.kubernetes.io/component: controller
+{{- end -}}
+
+{{- define "kargo.dexServer.labels" -}}
+app.kubernetes.io/component: dex-server
+{{- end -}}
+
+{{- define "kargo.externalWebhooksServer.labels" -}}
+app.kubernetes.io/component: external-webhooks-server
+{{- end -}}
+
+{{- define "kargo.garbageCollector.labels" -}}
+app.kubernetes.io/component: garbage-collector
+{{- end -}}
+
+{{- define "kargo.kubernetesWebhooksServer.labels" -}}
+app.kubernetes.io/component: kubernetes-webhooks-server
+{{- end -}}
+
+{{- define "kargo.managementController.labels" -}}
+app.kubernetes.io/component: management-controller
+{{- end -}}
+
+{{- define "kargo.postgres.labels" -}}
+app.kubernetes.io/component: postgres
+{{- end -}}
+
+{{- define "kargo.migrations.labels" -}}
+app.kubernetes.io/component: migrations
+{{- end -}}
+
+{{/*
+kargo.migrations.enabled returns "true" when the migration Job should be
+rendered: migrations are enabled and there is a database to migrate.
+*/}}
+{{- define "kargo.migrations.enabled" -}}
+{{- if and .Values.workloads.install .Values.database.migrations.enabled (or .Values.database.postgres.enabled .Values.database.external.secretName) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.migrations.podTemplate renders the migration Job's pod template. It is
+a named template so that kargo.migrations.jobName can hash exactly what
+Kubernetes treats as immutable.
+*/}}
+{{- define "kargo.migrations.podTemplate" -}}
+metadata:
+  labels:
+    {{- include "kargo.labels" . | nindent 4 }}
+    {{- include "kargo.migrations.labels" . | nindent 4 }}
+  {{- with (mergeOverwrite (deepCopy .Values.global.podLabels) .Values.database.migrations.podLabels) }}
+    {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
+  annotations:
+    configmap/checksum: {{ pick ( include (print $.Template.BasePath "/migrations/configmap.yaml") . | fromYaml ) "data" | toYaml | sha256sum }}
+  {{- with (mergeOverwrite (deepCopy .Values.global.podAnnotations) .Values.database.migrations.podAnnotations) }}
+    {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  # Each attempt gets a fresh Pod whose logs survive for inspection.
+  restartPolicy: Never
+  serviceAccountName: kargo-migrate
+  {{- with .Values.database.migrations.affinity | default .Values.global.affinity }}
+  affinity:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.database.migrations.priorityClassName | default .Values.global.priorityClassName }}
+  priorityClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.image.pullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  containers:
+  - name: migrate
+    image: {{ include "kargo.image" . }}
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    command: ["/sbin/tini", "--", "/usr/local/bin/kargo"]
+    args: ["migrate"]
+    env:
+    {{- include "kargo.database.env" . | nindent 4 }}
+    {{- with (concat .Values.global.env .Values.database.migrations.env) }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+    envFrom:
+    - configMapRef:
+        name: kargo-migrate
+    {{- with (concat .Values.global.envFrom .Values.database.migrations.envFrom) }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+    {{- with .Values.database.migrations.securityContext | default .Values.global.securityContext }}
+    securityContext:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    resources:
+      {{- toYaml .Values.database.migrations.resources | nindent 6 }}
+  {{- with .Values.database.migrations.nodeSelector | default .Values.global.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.database.migrations.tolerations | default .Values.global.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end -}}
+
+{{/*
+kargo.migrations.jobName returns a name for the migration Job that changes
+whenever its pod template does. A Job's pod template is immutable, so an
+upgrade that would change it must create a new Job rather than patch the old
+one, and an upgrade that leaves it alone must not. Hashing the rendered
+template rather than selected values keeps the two in step and keeps the
+database password, which some values carry, out of a resource name.
+Re-running against an already-migrated database is a no-op.
+*/}}
+{{- define "kargo.migrations.jobName" -}}
+kargo-migrate-{{ include "kargo.migrations.podTemplate" . | sha256sum | trunc 10 }}
+{{- end -}}
+
+{{/*
+kargo.database.validate fails the render if both the bundled PostgreSQL and an
+external database are configured, since only one can be the database.
+*/}}
+{{- define "kargo.database.validate" -}}
+{{- if and .Values.database.postgres.enabled .Values.database.external.secretName }}
+{{- fail "database.postgres.enabled and database.external.secretName cannot both be set. Disable the bundled PostgreSQL to use an external database." }}
+{{- end }}
+{{- if and .Values.database.postgres.password .Values.database.postgres.existingSecret }}
+{{- fail "database.postgres.password and database.postgres.existingSecret cannot both be set." }}
+{{- end }}
+{{- end -}}
+
+{{/*
+kargo.database.env renders the environment variables that point a component
+at the database, for every component that uses one: the bundled PostgreSQL
+when it is enabled, otherwise the external database's connection string.
+For the bundled database the binary composes the connection string from
+these parts, escaping the password, which a $(VAR) reference could not.
+Renders nothing when no database is configured, which leaves database
+features disabled.
+*/}}
+{{- define "kargo.database.env" -}}
+{{- if .Values.database.postgres.enabled }}
+- name: DATABASE_HOST
+  value: kargo-postgres.{{ .Release.Namespace }}.svc
+- name: DATABASE_PORT
+  value: "5432"
+- name: DATABASE_NAME
+  value: kargo
+- name: DATABASE_USER
+  value: kargo
+- name: DATABASE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "kargo.postgres.secretName" . }}
+      key: password
+- name: DATABASE_SSL_MODE
+  value: disable
+{{- else if .Values.database.external.secretName }}
+- name: DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.database.external.secretName }}
+      key: {{ .Values.database.external.secretKey }}
+{{- end }}
+{{- end -}}
+
+{{/*
+kargo.postgres.secretName returns the name of the Secret holding the bundled
+PostgreSQL's password: the operator's, when database.postgres.existingSecret
+is set, otherwise the chart's own.
+*/}}
+{{- define "kargo.postgres.secretName" -}}
+{{- .Values.database.postgres.existingSecret | default "kargo-postgres" -}}
+{{- end -}}
+
+{{/*
+kargo.cabundle.enabled returns the string "true" when the passed cabundle dict
+has either `configMapName` or `secretName` set; empty string otherwise. Useful
+inside `or` expressions in callers' outer guards.
+
+Usage:
+  {{- if or $kc (include "kargo.cabundle.enabled" .Values.api.cabundle) }}
+  volumeMounts:
+  ...
+*/}}
+{{- define "kargo.cabundle.enabled" -}}
+{{- if or .configMapName .secretName -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.cabundle.volumeMount renders the volumeMount entry for the
+cabundle-derived trust bundle at /etc/ssl/certs, if either configMapName or
+secretName is set on the passed cabundle dict. Empty otherwise.
+
+Pair with kargo.cabundle.initContainer and kargo.cabundle.volumes.
+
+Usage:
+  volumeMounts:
+  ...
+  {{- include "kargo.cabundle.volumeMount" .Values.api.cabundle | nindent 8 }}
+*/}}
+{{- define "kargo.cabundle.volumeMount" -}}
+{{- if or .configMapName .secretName -}}
+- mountPath: /etc/ssl/certs
+  name: certs
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.cabundle.initContainer renders the `parse-cabundle` init container that
+unpacks the customer-supplied CA cert source (mounted at /tmp/source) into a
+writable trust bundle mounted at /tmp/target. Pair with kargo.cabundle.volumes
+which exposes the `cabundle` and `certs` volumes the init container expects.
+
+The init container uses the kargo image (which has `update-ca-certificates`).
+
+Args (dict):
+  cabundle — the per-component cabundle config (configMapName / secretName)
+  context  — the chart context whose .Values.image and .Chart back the kargo
+             image lookup. Templates inside this chart pass `.` (their chart
+             root). Templates in a parent chart that depends on this one as a
+             subchart pass `.Subcharts.kargo` to point at this chart's context.
+
+Empty when the passed cabundle dict has neither configMapName nor secretName.
+
+Usage:
+  initContainers:
+  ...
+  {{- include "kargo.cabundle.initContainer" (dict "cabundle" .Values.api.cabundle "context" .) | nindent 6 }}
+*/}}
+{{- define "kargo.cabundle.initContainer" -}}
+{{- if or .cabundle.configMapName .cabundle.secretName -}}
+- name: parse-cabundle
+  image: {{ include "kargo.image" .context }}
+  imagePullPolicy: {{ .context.Values.image.pullPolicy }}
+  securityContext:
+    runAsUser: 0
+  command:
+  - "/bin/sh"
+  - "-c"
+  args:
+  - |
+    for file in /tmp/source/*; do
+      base_filename=$(basename "$file" .crt)
+      awk 'BEGIN {c=0;} /BEGIN CERT/{c++} { print > "/usr/local/share/ca-certificates/" base_filename "." c ".crt"}' base_filename="$base_filename" < $file
+    done
+    /usr/sbin/update-ca-certificates
+    find /etc/ssl/certs -type l -exec cp --remove-destination {} /etc/ssl/certs/ \;
+    cp -r /etc/ssl/certs/* /tmp/target/
+  volumeMounts:
+  - name: cabundle
+    mountPath: /tmp/source
+  - name: certs
+    mountPath: /tmp/target
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.cabundle.volumes renders the `cabundle` source volume (sourced from a
+Secret if `secretName` is set, otherwise from a ConfigMap by `configMapName`)
+and the writable `certs` emptyDir volume that the init container populates.
+
+Empty when the passed cabundle dict has neither configMapName nor secretName.
+
+Usage:
+  volumes:
+  ...
+  {{- include "kargo.cabundle.volumes" .Values.api.cabundle | nindent 6 }}
+*/}}
+{{- define "kargo.cabundle.volumes" -}}
+{{- if .secretName -}}
+- name: cabundle
+  secret:
+    secretName: {{ .secretName }}
+{{ end -}}
+{{- if and .configMapName (not .secretName) -}}
+- name: cabundle
+  configMap:
+    name: {{ .configMapName }}
+{{ end -}}
+{{- if or .configMapName .secretName -}}
+- name: certs
+  emptyDir: {}
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.nats.url returns the URL Kargo components use to connect to NATS. When
+the NATS subchart is enabled, the URL of its client Service is derived from the
+subchart's values. Otherwise, nats.external.url is used, and rendering fails
+if it has not been set, since the components that use NATS require it.
+*/}}
+{{- define "kargo.nats.url" -}}
+{{- if .Values.nats.enabled -}}
+{{- $namespace := .Values.nats.namespaceOverride | default .Release.Namespace -}}
+{{- $port := dig "config" "nats" "port" 4222 .Values.nats -}}
+{{- printf "nats://%s.%s.svc.cluster.local:%v" .Values.nats.fullnameOverride $namespace $port -}}
+{{- else if .Values.nats.external.url -}}
+{{- .Values.nats.external.url -}}
+{{- else -}}
+{{- fail "nats.external.url must be set when nats.enabled is false: the API server, controller, and management controller require a NATS server to connect to" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.nats.nkeySeedSecretName returns the name of the Secret containing the
+nkey seed Kargo components use to authenticate with NATS, or an empty string if
+none applies. Authentication is only supported with an external NATS server;
+the NATS installed by this chart does not require it.
+*/}}
+{{- define "kargo.nats.nkeySeedSecretName" -}}
+{{- if not .Values.nats.enabled -}}
+{{- .Values.nats.external.nkeySeedSecret.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.nats.configMapData renders the ConfigMap entries consumed by
+pkg/nats.ConfigFromEnv. NATS_SEED_KEY_FILE must agree with the mount path used
+by kargo.nats.volumeMount.
+
+Usage:
+  data:
+  {{- include "kargo.nats.configMapData" . | nindent 2 }}
+*/}}
+{{- define "kargo.nats.configMapData" -}}
+NATS_SERVER_URL: {{ include "kargo.nats.url" . | quote }}
+{{- if include "kargo.nats.nkeySeedSecretName" . }}
+NATS_SEED_KEY_FILE: /etc/kargo/nats/seed.nk
+{{- end }}
+{{- end -}}
+
+{{/*
+kargo.nats.env renders the NATS environment variables that cannot come from a
+ConfigMap because they differ per pod. NATS_CLIENT_NAME is the pod name so that
+connections reported by the NATS server identify an exact replica.
+
+Usage:
+  env:
+  {{- include "kargo.nats.env" . | nindent 8 }}
+*/}}
+{{- define "kargo.nats.env" -}}
+- name: NATS_CLIENT_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+{{- end -}}
+
+{{/*
+kargo.nats.volumeMount renders the volumeMount for the NATS nkey seed, if
+applicable. Empty otherwise. Pair with kargo.nats.volume.
+
+Usage:
+  volumeMounts:
+  ...
+  {{- include "kargo.nats.volumeMount" . | nindent 8 }}
+*/}}
+{{- define "kargo.nats.volumeMount" -}}
+{{- if include "kargo.nats.nkeySeedSecretName" . -}}
+- mountPath: /etc/kargo/nats
+  name: nats-nkey
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{/*
+kargo.nats.volume renders the volume containing the NATS nkey seed, if
+applicable. Empty otherwise. The Secret key holding the seed is projected to
+the fixed filename that kargo.nats.configMapData points NATS_SEED_KEY_FILE
+at.
+
+Usage:
+  volumes:
+  ...
+  {{- include "kargo.nats.volume" . | nindent 6 }}
+*/}}
+{{- define "kargo.nats.volume" -}}
+{{- with include "kargo.nats.nkeySeedSecretName" . -}}
+- name: nats-nkey
+  secret:
+    secretName: {{ . }}
+    items:
+    - key: {{ $.Values.nats.external.nkeySeedSecret.key }}
+      path: seed.nk
+{{- end -}}
+{{- end -}}
