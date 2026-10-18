@@ -23,7 +23,7 @@ spec:
       source:
         repoURL: ${GITOPS_REPO_URL}
         targetRevision: stage/{{stage}}
-        path: app
+        path: charts/app
         helm:
           valueFiles:
           - values-{{stage}}.yaml

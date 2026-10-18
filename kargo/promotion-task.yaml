@@ -32,17 +32,17 @@ spec:
       path: ./out
 
   # 3. Copy the Helm chart from the source branch onto the stage branch.
-  #    Argo CD renders this chart (path: app) using values-<stage>.yaml.
+  #    Argo CD renders this chart (path: charts/app) using values-<stage>.yaml.
   - uses: copy
     config:
-      inPath: ./src/app
-      outPath: ./out/app
+      inPath: ./src/charts/app
+      outPath: ./out/charts/app
 
   # 4. Patch image.tag in the stage values file with the Freight image tag.
   - uses: yaml-update
     as: update
     config:
-      path: ./out/app/values-${{ ctx.stage }}.yaml
+      path: ./out/charts/app/values-${{ ctx.stage }}.yaml
       updates:
       - key: image.tag
         value: ${{ imageFrom(vars.imageRepo).Tag }}

@@ -24,7 +24,7 @@ jobs:
             comments-indentation: disable,
             indentation: {indent-sequences: false}
           }
-        }' argocd/ kargo/ app/Chart.yaml app/values.yaml app/values-test.yaml app/values-uat.yaml app/values-prod.yaml
+        }' argocd/ kargo/ charts/app/Chart.yaml charts/app/values.yaml charts/app/values-test.yaml charts/app/values-uat.yaml charts/app/values-prod.yaml
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -40,12 +40,12 @@ jobs:
     - name: Install Helm
       uses: azure/setup-helm@v4
     - name: Lint chart
-      run: helm lint app/
+      run: helm lint charts/app/
     - name: Validate template rendering per stage
       run: |
         for stage in test uat prod; do
           echo "Validating stage: ${stage}"
-          helm template kargo-demo app/ -f "app/values-${stage}.yaml"
+          helm template kargo-demo charts/app/ -f "charts/app/values-${stage}.yaml"
         done
 
   docker-build:
