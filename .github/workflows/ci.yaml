@@ -31,7 +31,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Run ShellCheck
-      run: shellcheck setup.sh cleanup.sh start.sh
+      run: shellcheck setup.sh cleanup.sh ./app/start.sh
 
   helm-validate:
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Test Docker build
-      run: docker build -t kargodemo:test .
+      run: docker build -t kargodemo:test ./app/
 
   security-scan:
     runs-on: ubuntu-latest
