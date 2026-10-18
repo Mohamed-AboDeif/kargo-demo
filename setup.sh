@@ -56,10 +56,10 @@ else
   git remote add origin "$REPO_URL_WITH_CREDS"
 fi
 
-if [ -f "app/Chart.yaml" ]; then
+if [ -f "charts/app/Chart.yaml" ]; then
   info "GitOps repo already contains Helm chart, skipping push."
 else
-  cp -r "$SCRIPT_DIR/app" .
+  cp -r "$SCRIPT_DIR/charts/app" .
 
   git add .
   git -c user.name="kargo-demo" -c user.email="kargo-demo@example.com" \
