@@ -4,6 +4,7 @@ metadata:
   name: kargo-demo
   namespace: kargo-demo
 spec:
+  interval: "10s"
   subscriptions:
   # New image tags create Freight (app code changes).
   - name: image

@@ -25,7 +25,7 @@ jobs:
     # Build and load locally so the image can be scanned before it is pushed.
     - uses: docker/build-push-action@v6
       with:
-        context: .
+        context: ./app
         load: true
         push: false
         tags: ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}
@@ -46,7 +46,7 @@ jobs:
     - name: Push image
       uses: docker/build-push-action@v6
       with:
-        context: .
+        context: ./app
         push: true
         tags: |
           ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}

@@ -77,10 +77,10 @@ jobs:
         ignore-unfixed: true
         # .env is gitignored (never committed); skip it so a developer's
         # local credentials file does not break the scan.
-        skip-files: .env
+        skip-files: charts/**
 
     - name: Build image for scanning
-      run: docker build -t kargodemo:scan .
+      run: docker build -t kargodemo:scan ./app/
 
     # Scan the built container image for OS/library vulnerabilities.
     - name: Trivy image scan

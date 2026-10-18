@@ -102,7 +102,7 @@ controller:
   # -- [priorityClassName] for the controller
   priorityClassName: ""
   # -- The number of controller pods to run
-  replicas: 2
+  replicas: 1
   image:
     # -- Registry to use
     registry: quay.io
