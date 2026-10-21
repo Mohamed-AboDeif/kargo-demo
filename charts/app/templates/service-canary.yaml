@@ -15,4 +15,22 @@ spec:
     name: http
   selector:
     {{- include "kargo-demo.selectorLabels" . | nindent 4 }}
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "kargo-demo.fullname" . }}-canary
+  labels:
+    {{- include "kargo-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: canary
+spec:
+  entryPoints:
+    - {{ .Values.ingress.entryPoint | default "web" }}
+  routes:
+    - match: Host(`canary-{{ .Values.ingress.hosts }}`)
+      kind: Rule
+      services:
+        - name: {{ include "kargo-demo.fullname" . }}-canary
+          port:  {{ .Values.service.port }}
 {{- end }}
