@@ -1,7 +1,7 @@
 replicaCount: 3
 stage: "prod"
 image:
-  tag: 26.10.18
+  tag: 26.10.20
 resources:
   limits:
     cpu: 500m
