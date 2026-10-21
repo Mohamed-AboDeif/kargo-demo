@@ -1561,7 +1561,7 @@ database:
     secretKey: connectionString
 
 ## @param extraObjects An array describing additional, arbitrary Kubernetes resources to include when rendering this chart. Items in the array may be YAML objects or strings. Either may be templated. Templates will be evaluated against the same set of values as the rest of the chart.
-extraObjects: []
+extraObjects:
 # - apiVersion: v1
 #   kind: ConfigMap
 #   metadata:
@@ -1575,3 +1575,16 @@ extraObjects: []
 #     name: custom-cm-2
 #   data:
 #     host: {{ .Values.api.host }}
+- apiVersion: traefik.io/v1alpha1
+  kind: IngressRoute
+  metadata:
+    name: kargo
+  spec:
+    entryPoints:
+    - web
+    routes:
+    - match: Host(`kargo.yodawy.registfylabs.online`)
+      kind: Rule
+      services:
+      - name: kargo-api
+        port: 80
