@@ -4,8 +4,8 @@ image:
   tag: 27.0.0
 resources:
   limits:
-    cpu: 100m
-    memory: 64Mi
+    cpu: 200m
+    memory: 128Mi
   requests:
     cpu: 200m
     memory: 128Mi
