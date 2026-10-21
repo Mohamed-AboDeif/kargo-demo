@@ -1,0 +1,61 @@
+{{- if not .Values.rollout.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kargo-demo.fullname" . }}
+  labels:
+    {{- include "kargo-demo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kargo-demo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kargo-demo.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: nginx
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag  | default .Chart.AppVersion  }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.containerPort }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "kargo-demo.fullname" . }}
+        {{- with .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        # Writable mounts required when readOnlyRootFilesystem is enabled.
+        # The page is rendered into /tmp/html at startup (see start.sh).
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: nginx-cache
+        emptyDir: {}
+{{- end }}
