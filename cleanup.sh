@@ -11,7 +11,7 @@ info "Deleting Argo CD ApplicationSet..."
 kubectl delete applicationset kargo-demo -n argocd --ignore-not-found
 
 info "Deleting stage namespaces..."
-for ns in kargo-demo-test kargo-demo-uat kargo-demo-prod; do
+for ns in kargo-demo-dev kargo-demo-stg kargo-demo-prd; do
   kubectl delete namespace "$ns" --ignore-not-found
 done
 

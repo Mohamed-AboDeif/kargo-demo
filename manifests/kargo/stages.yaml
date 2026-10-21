@@ -40,7 +40,7 @@ spec:
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: prod
+  name: prd
   namespace: kargo-demo
 spec:
   requestedFreight:

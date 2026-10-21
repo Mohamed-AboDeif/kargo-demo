@@ -20,4 +20,3 @@ spec:
       branch: main
       includePaths:
       - charts/app
-` 
