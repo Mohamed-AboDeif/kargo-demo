@@ -1,7 +1,7 @@
 replicaCount: 2
 stage: "uat"
 image:
-  tag: 26.10.18
+  tag: 26.10.20
 resources:
   limits:
     cpu: 200m
