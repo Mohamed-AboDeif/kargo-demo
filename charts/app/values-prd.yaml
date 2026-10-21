@@ -4,8 +4,8 @@ image:
   tag: "0.1.0"
 resources:
   limits:
-    cpu: 500m
-    memory: 256Mi
+    cpu: 100m
+    memory: 64Mi
   requests:
     cpu: 200m
     memory: 128Mi
@@ -22,3 +22,7 @@ rollout:
         - templateName: http-health-check
     - setWeight: 100
     analysis: {}
+
+ingress:
+  hosts:
+    - host: prd.yodawy.regisfylabs.online
