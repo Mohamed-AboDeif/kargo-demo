@@ -21,4 +21,4 @@ rollout:
     analysis: {}
 
 ingress:
-  hosts: dev.yodawy.regisfylabs.online
+  hosts: dev.yodawy.registfylabs.online
