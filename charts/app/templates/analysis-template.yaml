@@ -1,0 +1,29 @@
+{{- if .Values.rollout.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: http-health-check
+  labels:
+    {{- include "kargo-demo.labels" . | nindent 4 }}
+spec:
+  metrics:
+  - name: http-check
+    count: 1
+    failureLimit: 0
+    provider:
+      job:
+        spec:
+          backoffLimit: 2
+          template:
+            spec:
+              containers:
+              - name: check
+                image: curlimages/curl:8.10.1
+                command:
+                - curl
+                - -sf
+                - --max-time
+                - "10"
+                - http://{{ include "kargo-demo.fullname" . }}.kargo-demo-{{ .Values.stage }}.svc.cluster.local
+              restartPolicy: Never
+{{- end }}
