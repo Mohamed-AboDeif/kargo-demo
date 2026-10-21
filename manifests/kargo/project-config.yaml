@@ -5,9 +5,9 @@ metadata:
   namespace: kargo-demo
 spec:
   promotionPolicies:
-  - stage: test
+  - stage: dev
     autoPromotionEnabled: true
-  - stage: uat
+  - stage: stg
     autoPromotionEnabled: true
 ---
 apiVersion: v1

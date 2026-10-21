@@ -1,5 +1,5 @@
 replicaCount: 1
-stage: "test"
+stage: "dev"
 image:
   tag: "0.1.0"
 resources:

@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: dev
   namespace: kargo-demo
 spec:
   requestedFreight:
@@ -20,7 +20,7 @@ spec:
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: uat
+  name: stg
   namespace: kargo-demo
 spec:
   requestedFreight:
@@ -29,7 +29,7 @@ spec:
       name: kargo-demo
     sources:
       stages:
-      - test
+      - dev
   promotionTemplate:
     spec:
       steps:
@@ -49,7 +49,7 @@ spec:
       name: kargo-demo
     sources:
       stages:
-      - uat
+      - stg
   promotionTemplate:
     spec:
       steps:

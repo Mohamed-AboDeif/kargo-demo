@@ -1,22 +1,21 @@
-replicaCount: 2
-stage: "uat"
+replicaCount: 3
+stage: "prd"
 image:
   tag: "0.1.0"
 resources:
   limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
     cpu: 200m
     memory: 128Mi
-  requests:
-    cpu: 100m
-    memory: 64Mi
 
 rollout:
   enabled: true
   canary:
     steps:
-    - setWeight: 25
-    - pause:
-        duration: 60s
+    - setWeight: 10
+    - pause: {}
     - setWeight: 50
     - analysis:
         templates:

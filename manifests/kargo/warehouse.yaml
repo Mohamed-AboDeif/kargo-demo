@@ -4,14 +4,14 @@ metadata:
   name: kargo-demo
   namespace: kargo-demo
 spec:
-  interval: "2m"
+  interval: "2m" # check webhook option
   subscriptions:
   # New image tags create Freight (app code changes).
   - name: image
     image:
       repoURL: docker.io/abodeifregistfy/kargodemo
-      constraint: ">=0.1.0"
-      discoveryLimit: 5
+      constraint: ">=0.1.0" 
+      discoveryLimit: 5 # ?
   # New commits to main under charts/app/ create Freight (Helm chart changes),
   # so chart updates flow through the same test -> uat -> prod pipeline.
   - name: chart
@@ -20,3 +20,4 @@ spec:
       branch: main
       includePaths:
       - charts/app
+` 

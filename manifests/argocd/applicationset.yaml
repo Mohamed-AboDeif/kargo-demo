@@ -7,9 +7,9 @@ spec:
   generators:
   - list:
       elements:
-      - stage: test
-      - stage: uat
-      - stage: prod
+      - stage: dev
+      - stage: stg
+      - stage: prd
 
   template:
     metadata:
