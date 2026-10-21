@@ -10,7 +10,7 @@ err()   { printf '\033[0;31m[ERROR]\033[0m %s\n' "$1" >&2; }
 # Phase 1: Validate prerequisites
 info "Checking prerequisites..."
 
-for var in GITOPS_REPO_URL GITHUB_USERNAME GITHUB_PAT DOCKERHUB_USERNAME DOCKERHUB_PAT; do
+for var in GITOPS_REPO_URL GITHUB_USERNAME GITHUB_PAT DOCKERHUB_URL DOCKERHUB_USERNAME DOCKERHUB_PAT; do
   if [ -z "${!var:-}" ]; then
     err "Required environment variable $var is not set."
     echo ""
@@ -18,6 +18,7 @@ for var in GITOPS_REPO_URL GITHUB_USERNAME GITHUB_PAT DOCKERHUB_USERNAME DOCKERH
     echo "  export GITOPS_REPO_URL=https://github.com/<username>/<repo>"
     echo "  export GITHUB_USERNAME=<username>"
     echo "  export GITHUB_PAT=<personal-access-token>"
+    echo "  export DOCKERHUB_URL=<dockerhub-url>"
     echo "  export DOCKERHUB_USERNAME=<dockerhub-username>"
     echo "  export DOCKERHUB_PAT=<dockerhub-access-token>"
     echo "  ./setup.sh"
@@ -79,12 +80,12 @@ mkdir -p "$RENDERED_DIR"
 # shellcheck disable=SC2016
 ENVSUBST_VARS='$GITOPS_REPO_URL $GITHUB_USERNAME $GITHUB_PAT $DOCKERHUB_USERNAME $DOCKERHUB_PAT'
 
-envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/argocd/applicationset.yaml" > "$RENDERED_DIR/applicationset.yaml"
-envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/kargo/project-config.yaml" > "$RENDERED_DIR/project-config.yaml"
-envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/kargo/promotion-task.yaml" > "$RENDERED_DIR/promotion-task.yaml"
+envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/manifests/argocd/applicationset.yaml" > "$RENDERED_DIR/applicationset.yaml"
+envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/manifests/kargo/project-config.yaml" > "$RENDERED_DIR/project-config.yaml"
+envsubst "$ENVSUBST_VARS" < "$SCRIPT_DIR/manifests/kargo/promotion-task.yaml" > "$RENDERED_DIR/promotion-task.yaml"
 
-cp "$SCRIPT_DIR/kargo/warehouse.yaml" "$RENDERED_DIR/warehouse.yaml"
-cp "$SCRIPT_DIR/kargo/stages.yaml" "$RENDERED_DIR/stages.yaml"
+cp "$SCRIPT_DIR/manifests/kargo/warehouse.yaml" "$RENDERED_DIR/warehouse.yaml"
+cp "$SCRIPT_DIR/manifests/kargo/stages.yaml" "$RENDERED_DIR/stages.yaml"
 ok "Templates rendered"
 
 # Phase 4: Apply resources in dependency order
@@ -93,7 +94,7 @@ kubectl apply -f "$RENDERED_DIR/applicationset.yaml"
 ok "ApplicationSet created"
 
 info "Creating Kargo Project..."
-kubectl apply -f "$SCRIPT_DIR/kargo/project.yaml"
+kubectl apply -f "$SCRIPT_DIR/manifests/kargo/project.yaml"
 ok "Project created"
 
 info "Waiting for kargo-demo namespace..."
