@@ -47,3 +47,5 @@ rollout:
   canary:
     steps: []
     analysis: {}
+
+ingress: {}

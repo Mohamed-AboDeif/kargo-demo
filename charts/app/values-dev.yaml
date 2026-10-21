@@ -19,3 +19,6 @@ rollout:
         duration: 30s
     - setWeight: 100
     analysis: {}
+
+ingress:
+  hosts: dev.yodawy.registfylabs.online
