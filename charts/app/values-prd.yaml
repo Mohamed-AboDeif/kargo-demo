@@ -1,7 +1,7 @@
 replicaCount: 3
 stage: "prd"
 image:
-  tag: 27.0.1
+  tag: 27.5.11
 resources:
   limits:
     cpu: 200m
