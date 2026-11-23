@@ -1,5 +1,5 @@
 # Unprivileged nginx: runs as UID 101, listens on 8080, no root required.
-FROM nginxinc/nginx-unprivileged:stable-alpine3.24-perl
+FROM nginxinc/nginx-unprivileged:alpine3.24-perl
 
 # nginx-unprivileged already defines USER 101. Switch to root only to copy
 # files and set permissions, then drop back to the non-root user.
